@@ -1,0 +1,77 @@
+###### Input file - user input ######
+#NN data file
+param NN_data_file symbolic = "data\template nn _ 4 var_Python_Script_Keras_Model_Validation.xlsx";
+
+###### Loading NN data ######
+set input_l := {"Sm_Pgen_total_com_pedas","Wind","Sm_bus31_Pgen","Inertia_total"};
+set hidden_l;
+set output_l;
+set maxmin := {"max","min"};
+
+param hidden_w {input_l,hidden_l};
+param hidden_b {hidden_l};
+
+param output_w {hidden_l,output_l};
+param output_b {output_l};
+
+param in_normal {maxmin,input_l};
+param out_normal {maxmin,output_l};
+
+table bias1 IN "amplxl" (NN_data_file):
+	hidden_l <- [bias1], hidden_b~Bias_hidden;
+
+table bias2 IN "amplxl" (NN_data_file):
+	output_l <- [bias2], output_b~Bias_output;
+
+
+table weight1 IN "amplxl" (NN_data_file) "2D":
+	[input_l,hidden_l], hidden_w;
+
+table weight2 IN "amplxl" (NN_data_file) "2D":
+	[hidden_l,output_l], output_w;
+
+
+table normalization1 IN "amplxl" (NN_data_file) "2D":
+	[maxmin,input_l], in_normal;
+
+table normalization2 IN "amplxl" (NN_data_file) "2D":
+	[maxmin,output_l], out_normal;
+
+load amplxl.dll;
+read table bias1;
+read table bias2;
+read table weight1;
+read table weight2;
+read table normalization1;
+read table normalization2;
+
+###### NN constraints ######
+problem SC_AC_OPF;
+
+
+var input {input_l};
+var y1 {j in hidden_l} = sum{i in input_l} hidden_w[i,j]*((input[i]-in_normal["min",i])/(in_normal["max",i]-in_normal["min",i])) + hidden_b[j];
+var x2 {j in hidden_l} = if y1[j]>=-20 then 1/(1+exp(-y1[j])) else 0;
+
+var y2 {k in output_l} = sum{j in hidden_l} output_w[j,k]*x2[j] + output_b[k];
+var output {k in output_l} = y2[k]*(out_normal["max",k]-out_normal["min",k])+out_normal["min",k];
+
+
+/*
+subject to nadir_c:
+output["nadir"] <= 0.8;
+
+subject to rocof_c:
+output["ROCOF"] <= 1;
+*/
+
+
+#let input["Sm_Pgen_total_com_pedas"]:=3699.152405;
+#let input["Wind"]:=1122.181;
+#let input["Sm_bus31_Pgen"]:=460.0217896;
+#let input["Inertia_total"]:=34790;
+
+let input["Sm_Pgen_total_com_pedas"]:=3207.358826;
+let input["Wind"]:=2095.828;
+let input["Sm_bus31_Pgen"]:=437.1977234;
+let input["Inertia_total"]:=34790;
